@@ -15,6 +15,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+user_generation_status = {}
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(
@@ -23,8 +24,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     )
 
 
-async def _generate_and_send_config(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def _generate_and_send_config(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     chat_id = update.message.chat_id
+
+    # Проверка, если уже идет генерация
+    if user_generation_status.get(chat_id):
+        await update.message.reply_text("Генерация уже выполняется. Пожалуйста, подождите завершения текущей задачи.")
+        return
+
+    user_generation_status[chat_id] = True  # Устанавливаем флаг генерации
     message = await update.message.reply_text("Генерирую ваш конфиг WireGuard, пожалуйста, подождите...")
     temp_file_path = None
 
@@ -41,7 +49,6 @@ async def _generate_and_send_config(update: Update, context: ContextTypes.DEFAUL
             filename="warp_wireguard.conf",
             caption="Вот ваш файл конфигурации WireGuard."
         )
-
         await context.bot.edit_message_text(
             chat_id=chat_id,
             message_id=message.message_id,
@@ -53,7 +60,7 @@ async def _generate_and_send_config(update: Update, context: ContextTypes.DEFAUL
         await context.bot.edit_message_text(
             chat_id=chat_id,
             message_id=message.message_id,
-            text=f"Извините, не удалось сгенерировать конфиг прямо сейчас."
+            text="Извините, не удалось сгенерировать конфиг прямо сейчас."
         )
     except Exception as e:
         logger.exception(f"Произошла непредвиденная ошибка для пользователя {chat_id}:")
@@ -63,8 +70,10 @@ async def _generate_and_send_config(update: Update, context: ContextTypes.DEFAUL
             text="При генерации вашего конфига произошла непредвиденная ошибка. Пожалуйста, попробуйте позже."
         )
     finally:
+        user_generation_status[chat_id] = False  # Сбрасываем флаг
         if temp_file_path and os.path.exists(temp_file_path):
             os.remove(temp_file_path)
+
 
 
 async def generate_wg_config(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
